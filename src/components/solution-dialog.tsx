@@ -15,6 +15,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface SolutionDialogProps {
   solution: string;
@@ -53,12 +54,10 @@ export function SolutionDialog({ solution, problemName }: SolutionDialogProps) {
                 if (match) {
                   return (
                     <SyntaxHighlighter
+                      showLineNumbers={true}
                       language={match[1]}
                       PreTag="div"
-                      customStyle={{
-                        margin: 0,
-                        fontSize: "0.75rem",
-                      }}
+                      style={oneLight}
                     >
                       {codeString}
                     </SyntaxHighlighter>
