@@ -1,0 +1,208 @@
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Add01Icon } from "@hugeicons/core-free-icons";
+import type { SolvedProblem } from "@/data/mock";
+
+interface AddProblemSheetProps {
+  onAdd: (problem: Omit<SolvedProblem, "id">) => Promise<boolean>;
+}
+
+function getUTC8DateTime() {
+  const now = new Date();
+  const utc8 = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  return utc8.toISOString().slice(0, 16).replace("T", " ") + ":00";
+}
+
+function getDefaultFormData() {
+  return {
+    题目: "",
+    难度: "",
+    题解: "",
+    关键词: "",
+    日期: getUTC8DateTime(),
+  };
+}
+
+export function AddProblemSheet({ onAdd }: AddProblemSheetProps) {
+  const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formData, setFormData] = useState(getDefaultFormData);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // 每次打开时更新时间
+  useEffect(() => {
+    if (open) {
+      setFormData((prev) => ({ ...prev, 日期: getUTC8DateTime() }));
+    }
+  }, [open]);
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (!formData.题目.trim()) {
+      newErrors.题目 = "题目链接不能为空";
+    } else {
+      try {
+        new URL(formData.题目);
+      } catch {
+        newErrors.题目 = "请输入有效的 URL";
+      }
+    }
+
+    if (!formData.难度.trim()) {
+      newErrors.难度 = "难度不能为空";
+    } else if (!/^\d+$/.test(formData.难度)) {
+      newErrors.难度 = "难度必须是数字";
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = async () => {
+    if (!validate()) return;
+
+    setIsSubmitting(true);
+    try {
+      // 统一处理标签分隔符：全角逗号、半角逗号、空格 → 半角逗号
+      const normalizedTags = formData.关键词
+        .replace(/[，、]/g, ",")
+        .split(/[,\s]+/)
+        .map((t) => t.trim())
+        .filter(Boolean)
+        .join(", ");
+
+      const success = await onAdd({
+        题目: formData.题目.trim(),
+        难度: formData.难度.trim(),
+        题解: formData.题解.trim(),
+        关键词: normalizedTags,
+        日期: formData.日期,
+      });
+
+      if (success) {
+        setFormData(getDefaultFormData());
+        setErrors({});
+        setOpen(false);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleChange = (field: keyof typeof formData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8">
+          <HugeiconsIcon icon={Add01Icon} data-icon="inline-start" />
+          Add Problem
+        </Button>
+      </SheetTrigger>
+      <SheetContent className="sm:max-w-md">
+        <SheetHeader>
+          <SheetTitle>Add New Problem</SheetTitle>
+          <SheetDescription>
+            Add a new solved problem to your collection.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="grid flex-1 auto-rows-min gap-4 px-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="problem-url">
+              Problem URL <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="problem-url"
+              placeholder="https://codeforces.com/contest/1234/problem/A"
+              value={formData.题目}
+              onChange={(e) => handleChange("题目", e.target.value)}
+            />
+            {errors.题目 && (
+              <p className="text-xs text-destructive">{errors.题目}</p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="difficulty">
+              Difficulty <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="difficulty"
+              type="number"
+              placeholder="1600"
+              value={formData.难度}
+              onChange={(e) => handleChange("难度", e.target.value)}
+            />
+            {errors.难度 && (
+              <p className="text-xs text-destructive">{errors.难度}</p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="solution">Solution URL</Label>
+            <Input
+              id="solution"
+              placeholder="https://github.com/user/solutions/..."
+              value={formData.题解}
+              onChange={(e) => handleChange("题解", e.target.value)}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="tags">Tags</Label>
+            <Textarea
+              id="tags"
+              placeholder="DP, 贪心, 二分 (支持逗号/空格分隔)"
+              value={formData.关键词}
+              onChange={(e) => handleChange("关键词", e.target.value)}
+              className="resize-none"
+              rows={2}
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="date">AC Time</Label>
+            <Input
+              id="date"
+              type="datetime-local"
+              value={formData.日期.slice(0, 16).replace(" ", "T")}
+              onChange={(e) =>
+                handleChange("日期", e.target.value.replace("T", " ") + ":00")
+              }
+            />
+          </div>
+        </div>
+
+        <SheetFooter>
+          <Button onClick={handleSubmit} disabled={isSubmitting}>
+            {isSubmitting ? "Adding..." : "Add Problem"}
+          </Button>
+          <SheetClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </SheetClose>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}
