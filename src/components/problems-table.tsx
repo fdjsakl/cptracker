@@ -13,101 +13,13 @@ import { AddProblemSheet } from "@/components/add-problem-sheet";
 import { EditProblemSheet } from "@/components/edit-problem-sheet";
 import { Button } from "@/components/ui/button";
 import { Calendar, Hash, FileText, Link as LinkIcon, Tags, Star, Pencil } from "lucide-react";
+import { extractURLFromText, extractProblemInfo } from "@/lib/problem-utils";
 
 interface ProblemsTableProps {
   problems: SolvedProblem[];
   onFilteredDataChange?: (filteredProblems: SolvedProblem[]) => void;
   onAddProblem?: (problem: Omit<SolvedProblem, "id">) => Promise<boolean>;
   onEditProblem?: (id: number, changes: Partial<SolvedProblem>) => Promise<boolean>;
-}
-
-function extractURLFromText(text: string): string | null {
-  // 正则表达式匹配 http:// 或 https:// 开头的 URL
-  const urlRegex = /(https?:\/\/[^\s]+)/i;
-  const match = text.match(urlRegex);
-  return match ? match[1] : null;
-}
-
-function extractProblemInfo(text: string): { source: string; name: string; isURL: boolean } {
-  const url = extractURLFromText(text);
-
-  if (!url) {
-    return { source: "Text", name: text, isURL: false };
-  }
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
-
-    if (hostname.includes("codeforces.com")) {
-      const match = url.match(/contest\/(\d+)\/problem\/([A-Z]\d?)/);
-      if (match) {
-        return {
-          source: "Codeforces",
-          name: `CF${match[1]}${match[2]}`,
-          isURL: true,
-        };
-      }
-    }
-    
-    if (hostname.includes("codeforces.com")) {
-      const match = url.match(/problemset\/problem\/(\d+)\/([A-Z]\d?)/);
-      if (match) {
-        return {
-          source: "Codeforces",
-          name: `CF${match[1]}${match[2]}`,
-          isURL: true,
-        };
-      }
-    }
-
-    if (hostname.includes("luogu.com.cn")) {
-      const match = url.match(/\/([A-Z])(\d+)/);
-      if (match) {
-        return {
-          source: "Luogu",
-          name: `${match[1]}${match[2]}`,
-          isURL: true,
-        };
-      }
-    }
-
-    if (hostname.includes("vjudge.net")) {
-      const match = url.match(/\/problem\/(.*)/);
-      if (match) {
-        return {
-          source: "Vjudge",
-          name: `${match[1]}`,
-          isURL: true,
-        };
-      }
-    }
-
-    if (hostname.includes("atcoder.jp")) {
-      const match = url.match(/contests\/([^/]+)\/tasks\/([^/]+)/);
-      if (match) {
-        return {
-          source: "AtCoder",
-          name: match[2].toUpperCase(),
-          isURL: true,
-        };
-      }
-    }
-
-    if (hostname.includes("leetcode")) {
-      const match = url.match(/problems\/([^/]+)/);
-      if (match) {
-        return {
-          source: "LeetCode",
-          name: match[1],
-          isURL: true,
-        };
-      }
-    }
-
-    return { source: hostname, name: url, isURL: true };
-  } catch {
-    return { source: "Unknown", name: url, isURL: true };
-  }
 }
 
 function formatDate(dateStr: string): string {
@@ -154,6 +66,9 @@ export function ProblemsTable({ problems, onFilteredDataChange, onAddProblem, on
             { label: "Codeforces", value: "Codeforces" },
             { label: "AtCoder", value: "AtCoder" },
             { label: "LeetCode", value: "LeetCode" },
+            { label: "Nowcoder", value: "Nowcoder" },
+            { label: "Luogu", value: "Luogu" },
+            { label: "Vjudge", value: "Vjudge" },
           ],
           icon: LinkIcon,
         },

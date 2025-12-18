@@ -1,4 +1,3 @@
-import HeatMap from "@uiw/react-heat-map";
 import { useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -8,7 +7,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Heatmap } from "@/components/ui/heatmap";
 import type { SolvedProblem } from "@/data/mock";
+import { getProblemDisplayName } from "@/lib/problem-utils";
 
 interface ProblemHeatmapsProps {
   problems: SolvedProblem[];
@@ -18,6 +19,14 @@ interface YearHeatmapProps extends ProblemHeatmapsProps {
   selectedYear: number;
   onYearChange: (year: number) => void;
   availableYears: number[];
+}
+
+interface DayProblemMeta {
+  problems: Array<{
+    name: string;
+    difficulty: string;
+    url: string;
+  }>;
 }
 
 function parseDate(dateStr: string): string {
@@ -77,6 +86,19 @@ function YearSelector({
   );
 }
 
+function formatDateDisplay(date: string): string {
+  const d = new Date(date);
+  return d.toLocaleDateString("en-US", {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+// Color palette for problem count (green gradient like GitHub)
+const COUNT_COLORS = ["#9be9a8", "#40c463", "#30a14e", "#216e39"];
+
 export function ProblemCountHeatmap({
   problems,
   selectedYear,
@@ -84,16 +106,24 @@ export function ProblemCountHeatmap({
   availableYears,
 }: YearHeatmapProps) {
   const heatmapData = useMemo(() => {
-    const countByDate: Record<string, number> = {};
+    const dataByDate: Record<string, DayProblemMeta> = {};
 
     problems.forEach((p) => {
       const date = parseDate(p.日期);
-      countByDate[date] = (countByDate[date] || 0) + 1;
+      if (!dataByDate[date]) {
+        dataByDate[date] = { problems: [] };
+      }
+      dataByDate[date].problems.push({
+        name: getProblemDisplayName(p.题目),
+        difficulty: p.难度,
+        url: p.题目,
+      });
     });
 
-    return Object.entries(countByDate).map(([date, count]) => ({
+    return Object.entries(dataByDate).map(([date, meta]) => ({
       date,
-      count,
+      count: meta.problems.length,
+      meta,
     }));
   }, [problems]);
 
@@ -110,20 +140,29 @@ export function ProblemCountHeatmap({
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <HeatMap
-          value={heatmapData}
+        <Heatmap<DayProblemMeta>
+          data={heatmapData}
           startDate={getYearStartDate(selectedYear)}
           endDate={getYearEndDate(selectedYear)}
-          style={{ color: "var(--foreground)", minWidth: 720 }}
-          panelColors={{
-            0: "var(--muted)",
-            1: "#9be9a8",
-            2: "#40c463",
-            3: "#30a14e",
-            4: "#216e39",
-          }}
-          rectSize={12}
-          legendCellSize={12}
+          colors={COUNT_COLORS}
+          renderTooltip={(date, count, meta) => (
+            <div className="space-y-1">
+              <div className="font-medium">{formatDateDisplay(date)}</div>
+              <div className="text-muted-foreground">
+                {count} problem{count !== 1 ? "s" : ""}
+              </div>
+              {meta && meta.problems.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {meta.problems.map((p, i) => (
+                    <li key={i} className="flex items-center gap-1">
+                      <span>{p.name}</span>
+                      <span className="text-muted-foreground">({p.difficulty})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         />
       </CardContent>
     </Card>
@@ -140,26 +179,26 @@ function getDifficultyLevel(rating: number): number {
   return 7;
 }
 
-function getDifficultyColor(level: number): string {
-  switch (level) {
-    case 1:
-      return "#9ca3af"; // gray
-    case 2:
-      return "#22c55e"; // green
-    case 3:
-      return "#06b6d4"; // cyan
-    case 4:
-      return "#3b82f6"; // blue
-    case 5:
-      return "#a855f7"; // purple
-    case 6:
-      return "#f97316"; // orange
-    case 7:
-      return "#ef4444"; // red
-    default:
-      return "var(--muted)";
-  }
-}
+// Difficulty color palette
+const DIFFICULTY_COLORS = [
+  "#9ca3af", // 1: gray (<1200)
+  "#22c55e", // 2: green (1200-1399)
+  "#06b6d4", // 3: cyan (1400-1599)
+  "#3b82f6", // 4: blue (1600-1899)
+  "#a855f7", // 5: purple (1900-2099)
+  "#f97316", // 6: orange (2100-2399)
+  "#ef4444", // 7: red (2400+)
+];
+
+const DIFFICULTY_LABELS = [
+  "<1200",
+  "1200-1399",
+  "1400-1599",
+  "1600-1899",
+  "1900-2099",
+  "2100-2399",
+  "2400+",
+];
 
 export function MaxDifficultyHeatmap({
   problems,
@@ -168,19 +207,28 @@ export function MaxDifficultyHeatmap({
   availableYears,
 }: YearHeatmapProps) {
   const heatmapData = useMemo(() => {
-    const maxByDate: Record<string, number> = {};
+    const dataByDate: Record<string, { maxRating: number; problems: DayProblemMeta["problems"] }> = {};
 
     problems.forEach((p) => {
       const date = parseDate(p.日期);
       const rating = parseInt(p.难度, 10);
       if (!isNaN(rating)) {
-        maxByDate[date] = Math.max(maxByDate[date] || 0, rating);
+        if (!dataByDate[date]) {
+          dataByDate[date] = { maxRating: 0, problems: [] };
+        }
+        dataByDate[date].maxRating = Math.max(dataByDate[date].maxRating, rating);
+        dataByDate[date].problems.push({
+          name: getProblemDisplayName(p.题目),
+          difficulty: p.难度,
+          url: p.题目,
+        });
       }
     });
 
-    return Object.entries(maxByDate).map(([date, rating]) => ({
+    return Object.entries(dataByDate).map(([date, data]) => ({
       date,
-      count: getDifficultyLevel(rating),
+      count: getDifficultyLevel(data.maxRating),
+      meta: { problems: data.problems } as DayProblemMeta,
     }));
   }, [problems]);
 
@@ -197,74 +245,38 @@ export function MaxDifficultyHeatmap({
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-        <HeatMap
-          value={heatmapData}
+        <Heatmap<DayProblemMeta>
+          data={heatmapData}
           startDate={getYearStartDate(selectedYear)}
           endDate={getYearEndDate(selectedYear)}
-          style={{ color: "var(--foreground)", minWidth: 720 }}
-          panelColors={{
-            0: "var(--muted)",
-            1: getDifficultyColor(1),
-            2: getDifficultyColor(2),
-            3: getDifficultyColor(3),
-            4: getDifficultyColor(4),
-            5: getDifficultyColor(5),
-            6: getDifficultyColor(6),
-            7: getDifficultyColor(7),
-          }}
-          rectSize={12}
-          legendCellSize={12}
+          colors={DIFFICULTY_COLORS}
+          getColorIndex={(count) => count - 1}
+          renderTooltip={(date, count, meta) => (
+            <div className="space-y-1">
+              <div className="font-medium">{formatDateDisplay(date)}</div>
+              <div className="text-muted-foreground">
+                Max: {count > 0 ? DIFFICULTY_LABELS[count - 1] : "No data"}
+              </div>
+              {meta && meta.problems.length > 0 && (
+                <ul className="mt-1 space-y-0.5">
+                  {meta.problems.map((p, i) => (
+                    <li key={i} className="flex items-center gap-1">
+                      <span>{p.name}</span>
+                      <span className="text-muted-foreground">({p.difficulty})</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         />
         <div className="flex gap-2 mt-3 text-xs text-muted-foreground flex-wrap">
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(1) }}
-            />
-            &lt;1200
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(2) }}
-            />
-            1200-1399
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(3) }}
-            />
-            1400-1599
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(4) }}
-            />
-            1600-1899
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(5) }}
-            />
-            1900-2099
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(6) }}
-            />
-            2100-2399
-          </span>
-          <span className="flex items-center gap-1">
-            <span
-              className="w-3 h-3"
-              style={{ backgroundColor: getDifficultyColor(7) }}
-            />
-            2400+
-          </span>
+          {DIFFICULTY_COLORS.map((color, i) => (
+            <span key={i} className="flex items-center gap-1">
+              <span className="w-3 h-3" style={{ backgroundColor: color }} />
+              {DIFFICULTY_LABELS[i]}
+            </span>
+          ))}
         </div>
       </CardContent>
     </Card>

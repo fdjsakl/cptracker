@@ -7,6 +7,7 @@ import {
 } from "@/components/problem-heatmaps";
 import { ProblemsTable } from "@/components/problems-table";
 import { CSVToolbar } from "@/components/csv-toolbar";
+import { OJImport } from "@/components/oj-import";
 import { useProblemsDB } from "@/hooks/use-problems-db";
 import type { SolvedProblem } from "@/data/mock";
 
@@ -59,12 +60,15 @@ function Dashboard() {
               Track your problem-solving progress and performance
             </p>
           </div>
-          <CSVToolbar
-            problems={dbProblems}
-            onImport={importProblems}
-            onClearAll={clearAllProblems}
-            onReset={resetToMockData}
-          />
+          <div className="flex items-center gap-2">
+            <OJImport onImport={importProblems} />
+            <CSVToolbar
+              problems={dbProblems}
+              onImport={importProblems}
+              onClearAll={clearAllProblems}
+              onReset={resetToMockData}
+            />
+          </div>
         </header>
 
         <div className="grid gap-6 md:grid-cols-2">
